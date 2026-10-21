@@ -11,7 +11,26 @@ holds one schema covering every version it supports, and a protoc-shaped compile
 consumer names the version it wants and gets a compile error if it asks for a field
 that era never had.
 
-## Versions
+## Python runtime
+
+The `0.5.0.dev0` runtime provides immutable typed values and native codecs for
+all 19 schema versions listed below: 245 distinct packet IDs and 4,079 active
+version/packet pairs, together with their dependent types.
+`SUPPORTED_VERSIONS` lists the exact versions; `Codec.supported_packet_ids` and
+`Codec.known_packet_ids` list each version's active packets. See [the Python API and
+build instructions](docs/python.md).
+
+```python
+from bedrock_protocol import Codec, v2193
+
+codec = Codec(2193)
+packet = v2193.RequestNetworkSettingsPacket(client_network_version=2193)
+data = codec.encode_packet(packet)
+decoded = codec.decode_packet(data)
+assert decoded.payload.client_network_version == 2193
+```
+
+## Schema and C++ versions
 
 | protocol | Minecraft |
 | --- | --- |
@@ -169,9 +188,9 @@ is safe to branch on.
 
 ## Building
 
-Requires CMake, a C++23 compiler, and [uv](https://docs.astral.sh/uv/), which runs
-the compiler during the build. CI covers GCC (libstdc++), Clang 18 (libc++) and
-MSVC.
+Requires CMake and a C++23 compiler. A checkout also needs Python 3.12+ with
+`click` and `griffe` for code generation. A pregenerated C++ source release needs
+no Python. The Python and wire targets are optional and default to off.
 
 ```shell
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -185,13 +204,13 @@ top-level build and off when the project is added as a subdirectory.
 Code generation is wired into the build, but `bpc` can be run directly:
 
 ```shell
-uv run bpc --language cpp --out build/protocol --import-path . protocol/inventory.py
+PYTHONPATH=src python -m bedrock_protocol --language cpp --out build/protocol --import-path . protocol/inventory.py
 ```
 
 ## Using it
 
-As a subproject. Code generation runs during the build, so this needs uv on the
-consumer's machine too:
+As a subproject. A checkout runs code generation with the configured Python
+interpreter; a pregenerated release skips that step:
 
 ```cmake
 add_subdirectory(bedrock-protocol)
@@ -241,4 +260,6 @@ sources and the conventions the schema follows.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+The original C++ library, schema and compiler use the [MIT license](LICENSE).
+The adapted wire and owned-view code retains its Apache-2.0 license. Native wheel
+dependency notices are included under [licenses/](licenses/).

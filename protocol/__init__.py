@@ -44,6 +44,27 @@ from enum import auto
 from typing import Any, TypeAliasType, Union
 
 __version__ = 2225
+__supported_versions__ = (
+    729,
+    748,
+    766,
+    776,
+    786,
+    800,
+    818,
+    819,
+    827,
+    844,
+    859,
+    898,
+    924,
+    944,
+    975,
+    1001,
+    2168,
+    2193,
+    2225,
+)
 
 
 def _identity(cls):

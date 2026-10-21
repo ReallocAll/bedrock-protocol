@@ -1,14 +1,14 @@
 [project]
 name = "bedrock-protocol"
-version = "0.4.3"
-description = "Bedrock protocol compiler -- reads protocol/*.py DSL and emits C++ headers."
+version = "0.5.0.dev0"
+description = "Typed native Bedrock protocol codecs and schema compiler."
 requires-python = ">=3.12"
-license = "MIT"
-license-files = ["LICENSE"]
-dependencies = [
-    "click",
-    "griffe",
-]
+license = "MIT AND Apache-2.0 AND BSD-3-Clause AND Zlib"
+license-files = ["LICENSE", "licenses/*.txt"]
+dependencies = []
+
+[project.optional-dependencies]
+compiler = ["click", "griffe"]
 
 [project.scripts]
 bpc = "bedrock_protocol.cli:main"
@@ -17,14 +17,21 @@ bpc = "bedrock_protocol.cli:main"
 dev = ["mypy", "pytest", "pytest-xdist"]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["conan-py-build==0.6.4", "nanobind==3.1.0", "click", "griffe"]
+build-backend = "conan_py_build.build"
 
-[tool.hatch.build.targets.wheel]
+[tool.conan-py-build]
+extra-arguments = ["-o=&:with_python=True", "-o=&:with_wire=True", "-o=&:with_tests=False"]
+
+[tool.conan-py-build.wheel]
 packages = ["src/bedrock_protocol"]
+exclude = ["__pycache__", "*.pyc"]
+
+[tool.conan-py-build.sdist]
+include = ["protocol", "tests", "third_party", "licenses", "docs", "conanfile.py"]
 
 [tool.mypy]
-files = ["src"]
+packages = ["bedrock_protocol"]
 python_version = "3.12"
 strict = true
 

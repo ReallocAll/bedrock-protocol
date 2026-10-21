@@ -17,11 +17,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync
+      - run: uv sync --extra compiler
       - name: ruff
         run: uvx ruff check .
       - name: mypy
-        run: uv run mypy
+        run: uv run --no-sync mypy
 
   test:
     name: Compiler tests
@@ -29,9 +29,84 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync
+      - run: uv sync --extra compiler
       - name: pytest
-        run: uv run pytest -n auto
+        run: uv run --no-sync pytest -n auto
+
+  delivery:
+    name: Python and wire (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    env:
+      CONAN_HOME: ${{ runner.temp }}/delivery-conan
+      PYTHONUTF8: "1"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: lukka/get-cmake@latest
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Set up clang-cl
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $clangBin = Join-Path $env:VSINSTALLDIR 'VC\Tools\Llvm\x64\bin'
+          $clang = Join-Path $clangBin 'clang-cl.exe'
+          if (-not (Test-Path -LiteralPath $clang)) { throw "clang-cl is missing: $clang" }
+          $clangBin | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          & $clang --version
+      - name: Install build tools and create a private profile
+        run: |
+          python -m pip install build conan click griffe
+          if [ "$RUNNER_OS" = Windows ]; then
+            mkdir -p "$CONAN_HOME/profiles"
+            cp cmake/conan/windows-clang.profile "$CONAN_HOME/profiles/delivery"
+          else
+            conan profile detect --name delivery
+            printf '\n[conf]\ntools.cmake.cmaketoolchain:generator=Ninja\ntools.build:jobs=2\n' >> "$CONAN_HOME/profiles/delivery"
+          fi
+      - name: Build sdist from tracked input
+        run: |
+          python tests/package/check_delivery.py stage . "$RUNNER_TEMP/delivery-source"
+          python -m build --sdist "$RUNNER_TEMP/delivery-source" --outdir "$RUNNER_TEMP/delivery-dist"
+          python tests/package/check_delivery.py extract "$RUNNER_TEMP"/delivery-dist/*.tar.gz "$RUNNER_TEMP/delivery-sdist"
+      - name: Build wheel from sdist
+        run: |
+          python -m build --wheel "$RUNNER_TEMP"/delivery-sdist/* --outdir "$RUNNER_TEMP/delivery-dist" \
+            -C host-profile=delivery -C build-profile=delivery -C "build-dir=$RUNNER_TEMP/delivery-wheel-build"
+      - name: Test the installed wheel outside the checkout
+        run: |
+          python -m venv "$RUNNER_TEMP/delivery-consumer"
+          if [ "$RUNNER_OS" = Windows ]; then
+            consumer="$RUNNER_TEMP/delivery-consumer/Scripts/python.exe"
+          else
+            consumer="$RUNNER_TEMP/delivery-consumer/bin/python"
+          fi
+          "$consumer" -m pip install pytest "$RUNNER_TEMP"/delivery-dist/*.whl
+          mkdir "$RUNNER_TEMP/delivery-consumer-tests"
+          cp -r "$RUNNER_TEMP"/delivery-sdist/*/tests "$RUNNER_TEMP/delivery-consumer-tests/"
+          cd "$RUNNER_TEMP/delivery-consumer-tests"
+          "$consumer" -I "$GITHUB_WORKSPACE/tests/package/check_delivery.py" installed "$RUNNER_TEMP/delivery-source/protocol/__init__.py"
+          "$consumer" -I -m pytest tests/python
+      - name: Build and run the independent wire golden
+        run: |
+          conan install "$RUNNER_TEMP/delivery-source" --output-folder "$RUNNER_TEMP/delivery-wire" \
+            --profile:host delivery --profile:build delivery --build=missing \
+            '-o=&:with_wire=True' '-o=&:with_tests=True'
+          cmake -S "$RUNNER_TEMP/delivery-source" -B "$RUNNER_TEMP/delivery-wire/build/Release" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$RUNNER_TEMP/delivery-wire/build/Release/generators/conan_toolchain.cmake"
+          cmake --build "$RUNNER_TEMP/delivery-wire/build/Release" --target bedrock_protocol_wire_tests
+          ctest --test-dir "$RUNNER_TEMP/delivery-wire/build/Release" -R '^bedrock_protocol_wire_tests$' --no-tests=error --output-on-failure
 
   # Three compilers across three standard libraries. Clang pairs with libc++
   # rather than libstdc++ because libstdc++'s <expected> is incompatible with
@@ -80,8 +155,9 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
+      - run: uv sync --no-install-project --extra compiler
       - name: Configure
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/stage ${{ matrix.cmakeflags }}
+        run: uv run --no-sync cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/stage ${{ matrix.cmakeflags }}
       - name: Build
         run: cmake --build build
       - name: Test
@@ -131,7 +207,8 @@ jobs:
 
       - name: Generate
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBEDROCK_PROTOCOL_BUILD_TESTS=OFF
+          uv sync --no-install-project --extra compiler
+          uv run --no-sync cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBEDROCK_PROTOCOL_BUILD_TESTS=OFF
           cmake --build build
 
       - name: Stage
