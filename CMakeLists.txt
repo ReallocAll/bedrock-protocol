@@ -15,6 +15,7 @@ else ()
 endif ()
 option(BEDROCK_PROTOCOL_BUILD_TESTS "Build the test suite" ${_tests_default})
 option(BEDROCK_PROTOCOL_INSTALL "Generate the install target and CMake package" ${PROJECT_IS_TOP_LEVEL})
+option(BEDROCK_PROTOCOL_BUILD_WIRE "Build batch compression and encryption" OFF)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -91,6 +92,13 @@ else ()
             "${BEDROCK_PROTOCOL_GENERATED_DIR}/include/bedrock/protocol.hpp"
             @ONLY
     )
+endif ()
+
+# Optional runtime dependencies are confined to the wire target.
+set(BEDROCK_PROTOCOL_HAS_WIRE OFF)
+if (BEDROCK_PROTOCOL_BUILD_WIRE)
+    set(BEDROCK_PROTOCOL_HAS_WIRE ON)
+    add_subdirectory(src/wire)
 endif ()
 
 # Tests

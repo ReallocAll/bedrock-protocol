@@ -1,0 +1,5 @@
+Adapted byte codecs and native views from bedrock-bot, licensed under Apache-2.0.
+Changes: protocol-only ownership, typed construction, bounds, and removal of transport framing.
+
+Build configuration also follows bedrock-bot and EndstoneMC/endstone (Apache-2.0).
+https://github.com/EndstoneMC/endstone
