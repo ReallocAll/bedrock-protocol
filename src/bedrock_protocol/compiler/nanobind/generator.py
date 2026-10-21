@@ -141,7 +141,8 @@ class BindingWriter:
         if isinstance(field, MappingType):
             key = self.adapter(field.key, version, construction=construction)
             value = self.adapter(field.value, version, construction=construction)
-            result = f"Mapping<{key}, {value}>"
+            prefix = f", {PRIMITIVE_TYPES[field.prefix.encoding]}" if construction else ""
+            result = f"Mapping<{key}, {value}{prefix}>"
             if not construction:
                 self.containers[result] = ("bindMap", "_M" + hashlib.sha256(result.encode()).hexdigest()[:16])
             return result
@@ -200,15 +201,19 @@ class BindingWriter:
                 out.append(f"value.{field.name} = {adapter}::load(a{i});")
         # A count predicate is a public construction invariant too.
         for field, t in params:
-            current = t.inner if isinstance(t, (CondType, OptionalType)) else t
+            current: FieldType | None = t
+            target = f"value.{field.name}"
+            guards = []
+            while isinstance(current, (CondType, OptionalType)):
+                if isinstance(current, CondType):
+                    guards.append(render_predicate(current.predicate, "value", ctx, shape.snapshot))
+                else:
+                    guards.append(f"{target}.has_value()")
+                    target = f"(*{target})"
+                current = current.inner
             if isinstance(current, RepeatedType) and current.count:
                 count = render_count(current.count, "value", ctx, shape.snapshot).replace("detail::", "bp::detail::")
-                target = f"value.{field.name}"
-                guard = "true"
-                if isinstance(t, OptionalType):
-                    guard, target = f"{target}.has_value()", f"(*{target})"
-                elif isinstance(t, CondType):
-                    guard = render_predicate(t.predicate, "value", ctx, shape.snapshot)
+                guard = " && ".join(f"({condition})" for condition in guards) or "true"
                 out.append(
                     f"if ({guard}) {{ auto count = {count}; if (!count || {target}.size() != *count) "
                     f'throw nb::value_error("{py_name(field.name)} length disagrees with its count"); }}'
@@ -411,6 +416,14 @@ class BindingWriter:
             else:
                 out.append(f"{lhs} = {self.hint(field, version)}")
         out.append("del _types, _Namespace")
+        used = {node.id for node in ast.walk(ast.parse("\n".join(out))) if isinstance(node, ast.Name)}
+        for module, candidates in (
+            ("typing", ("Literal",)),
+            (".", ("BinaryView", "MapView", "SequenceView")),
+        ):
+            needed = [name for name in candidates if name in used]
+            if needed:
+                out.insert(4, f"from {module} import {', '.join(needed)}")
         return "\n".join(out) + "\n"
 
     def hint(self, t: FieldType | None, version: int, constructor: bool = False, owner: str = "") -> str:

@@ -17,11 +17,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --extra compiler
+      - run: uv sync --no-install-project --extra compiler
       - name: ruff
         run: uvx ruff check .
+      - name: Generate Python stubs
+        run: |
+          uv run --no-sync python -m bedrock_protocol --language nanobind --out build/python --import-path . protocol/[!_]*.py
+          cp build/python/bedrock_protocol/*.pyi src/bedrock_protocol/
+        env:
+          PYTHONPATH: src
       - name: mypy
         run: uv run --no-sync mypy
+        env:
+          MYPYPATH: src
 
   test:
     name: Compiler tests
@@ -29,9 +37,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --extra compiler
+      - run: uv sync --no-install-project --extra compiler
       - name: pytest
-        run: uv run --no-sync pytest -n auto
+        run: uv run --no-sync pytest tests/compiler -n auto
+        env:
+          PYTHONPATH: src
 
   delivery:
     name: Python and wire (${{ matrix.os }})
@@ -66,7 +76,7 @@ jobs:
           & $clang --version
       - name: Install build tools and create a private profile
         run: |
-          python -m pip install build conan click griffe
+          python -m pip install build conan click griffe pytest nanobind==3.1.0
           if [ "$RUNNER_OS" = Windows ]; then
             mkdir -p "$CONAN_HOME/profiles"
             cp cmake/conan/windows-clang.profile "$CONAN_HOME/profiles/delivery"
@@ -79,6 +89,14 @@ jobs:
           python tests/package/check_delivery.py stage . "$RUNNER_TEMP/delivery-source"
           python -m build --sdist "$RUNNER_TEMP/delivery-source" --outdir "$RUNNER_TEMP/delivery-dist"
           python tests/package/check_delivery.py extract "$RUNNER_TEMP"/delivery-dist/*.tar.gz "$RUNNER_TEMP/delivery-sdist"
+      - name: Run generated native regressions
+        run: |
+          fixture_args=()
+          if [ "$RUNNER_OS" = Windows ]; then
+            fixture_args+=(--cmake-arg=-DCMAKE_CXX_COMPILER=clang-cl)
+          fi
+          python "$RUNNER_TEMP"/delivery-sdist/*/tests/compiler/native/run.py \
+            --work-dir "$RUNNER_TEMP/delivery-native-fixture" "${fixture_args[@]}"
       - name: Build wheel from sdist
         run: |
           python -m build --wheel "$RUNNER_TEMP"/delivery-sdist/* --outdir "$RUNNER_TEMP/delivery-dist" \
@@ -91,11 +109,14 @@ jobs:
           else
             consumer="$RUNNER_TEMP/delivery-consumer/bin/python"
           fi
-          "$consumer" -m pip install pytest "$RUNNER_TEMP"/delivery-dist/*.whl
+          wheels=("$RUNNER_TEMP"/delivery-dist/*.whl)
+          test "${#wheels[@]}" -eq 1
+          "$consumer" -m pip install pytest "${wheels[0]}[compiler]"
           mkdir "$RUNNER_TEMP/delivery-consumer-tests"
           cp -r "$RUNNER_TEMP"/delivery-sdist/*/tests "$RUNNER_TEMP/delivery-consumer-tests/"
           cd "$RUNNER_TEMP/delivery-consumer-tests"
           "$consumer" -I "$GITHUB_WORKSPACE/tests/package/check_delivery.py" installed "$RUNNER_TEMP/delivery-source/protocol/__init__.py"
+          "$consumer" -I "$GITHUB_WORKSPACE/tests/package/check_delivery.py" compiler "$RUNNER_TEMP/delivery-source/protocol/__init__.py" "$RUNNER_TEMP/delivery-bpc"
           "$consumer" -I -m pytest tests/python
       - name: Build and run the independent wire golden
         run: |
@@ -105,8 +126,17 @@ jobs:
           cmake -S "$RUNNER_TEMP/delivery-source" -B "$RUNNER_TEMP/delivery-wire/build/Release" -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE="$RUNNER_TEMP/delivery-wire/build/Release/generators/conan_toolchain.cmake"
-          cmake --build "$RUNNER_TEMP/delivery-wire/build/Release" --target bedrock_protocol_wire_tests
+          cmake --build "$RUNNER_TEMP/delivery-wire/build/Release" --target bedrock_protocol bedrock_protocol_wire_tests
           ctest --test-dir "$RUNNER_TEMP/delivery-wire/build/Release" -R '^bedrock_protocol_wire_tests$' --no-tests=error --output-on-failure
+      - name: Consume the installed wire target
+        run: |
+          cmake --install "$RUNNER_TEMP/delivery-wire/build/Release" --prefix "$RUNNER_TEMP/delivery-wire-stage"
+          cmake -S "$RUNNER_TEMP/delivery-source/tests/package" -B "$RUNNER_TEMP/delivery-wire-consumer" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$RUNNER_TEMP/delivery-wire/build/Release/generators/conan_toolchain.cmake" \
+            -Dbedrock-protocol_DIR="$RUNNER_TEMP/delivery-wire-stage/lib/cmake/bedrock-protocol"
+          cmake --build "$RUNNER_TEMP/delivery-wire-consumer"
+          ctest --test-dir "$RUNNER_TEMP/delivery-wire-consumer" -R '^package_wire_test$' --no-tests=error --output-on-failure
 
   # Three compilers across three standard libraries. Clang pairs with libc++
   # rather than libstdc++ because libstdc++'s <expected> is incompatible with

@@ -5,9 +5,11 @@ import ast
 import hashlib
 import importlib
 import json
+import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tarfile
 from pathlib import Path
 
@@ -90,6 +92,48 @@ def installed(schema):
     print(f"Installed consumer: {package}; {len(expected)} versions, stubs and exports passed")
 
 
+def compiler(schema, workspace):
+    import bedrock_protocol as bp
+
+    native = importlib.import_module("bedrock_protocol._native")
+    package = Path(bp.__file__).resolve().parent
+    assert package.is_relative_to(Path(sys.prefix).resolve()), package
+    assert not workspace.is_relative_to(Path(__file__).resolve().parents[2]), workspace
+    assert not workspace.exists(), workspace
+    launcher = Path(sysconfig.get_path("scripts")) / ("bpc.exe" if os.name == "nt" else "bpc")
+    assert launcher.is_file(), launcher
+    native_path = Path(native.__file__).resolve()
+    assert native_path.is_relative_to(package), native_path
+    native_hash = hashlib.sha256(native_path.read_bytes()).hexdigest()
+    inputs = workspace / "protocol"
+    inputs.mkdir(parents=True)
+    shutil.copyfile(schema, inputs / "__init__.py")
+    (inputs / "installed.py").write_text(
+        "from protocol import packet, uint32\n\n"
+        "@packet(id=1)\nclass InstalledPacket:\n    value: uint32\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    env.pop("PYTHONHOME", None)
+    subprocess.run(
+        [str(launcher), "--language", "cpp", "--out", "generated", "--import-path", ".", "protocol/installed.py"],
+        cwd=workspace,
+        env=env,
+        check=True,
+    )
+    header = workspace / "generated/installed.h"
+    source = workspace / "generated/installed.cpp"
+    assert "struct InstalledPacket" in header.read_text(encoding="utf-8")
+    assert "Serializer<" in source.read_text(encoding="utf-8")
+    assert hashlib.sha256(native_path.read_bytes()).hexdigest() == native_hash
+    print(json.dumps({
+        "launcher": str(launcher), "cwd": str(workspace), "package": str(package),
+        "native": str(native_path), "native_sha256": native_hash,
+        "outputs": [str(header), str(source)],
+    }, indent=2))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -98,9 +142,14 @@ if __name__ == "__main__":
         command.add_argument("source", type=Path)
         command.add_argument("destination", type=Path)
     commands.add_parser("installed").add_argument("schema", type=Path)
+    command = commands.add_parser("compiler")
+    command.add_argument("schema", type=Path)
+    command.add_argument("workspace", type=Path)
     args = parser.parse_args()
     if args.command == "installed":
         installed(args.schema)
+    elif args.command == "compiler":
+        compiler(args.schema.resolve(), args.workspace.resolve())
     elif args.command == "stage":
         stage(args.source.resolve(), args.destination.resolve())
     else:

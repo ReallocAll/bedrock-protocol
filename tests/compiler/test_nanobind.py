@@ -145,6 +145,18 @@ class Shared:
         assert "bind_shared(types);" in result.files["bindings.cpp"]
         assert "Shared: TypeAlias = _v1001.Shared" in result.files["bedrock_protocol/v2193.pyi"]
 
+    def test_mapping_prefix_is_construction_only(self):
+        _, result = self.generate("""
+from protocol import field, packet, uint8
+package = "bedrock.protocol"
+@packet(id=7)
+class Root:
+    values: dict[str, uint8] = field(prefix=uint8)
+""")
+        assert "Mapping<Text, Scalar<std::uint8_t>, std::uint8_t>::load(a0)" in result.files["mod.cpp"]
+        assert "bindMap<Mapping<Text, Scalar<std::uint8_t>>>" in result.files["bindings.cpp"]
+        assert "bindMap<Mapping<Text, Scalar<std::uint8_t>, std::uint8_t>>" not in result.files["bindings.cpp"]
+
     def test_builtin_metadata_has_the_exact_discrete_supported_versions(self):
         resolved = self.resolve("""
 from protocol import packet

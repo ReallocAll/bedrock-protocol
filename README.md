@@ -20,6 +20,13 @@ version/packet pairs, together with their dependent types.
 `Codec.known_packet_ids` list each version's active packets. See [the Python API and
 build instructions](docs/python.md).
 
+The compiler and runtime share one native Python distribution. Unlike the pure
+Python compiler package in 0.4.3, installing `0.5.0.dev0` requires a compatible
+native wheel or a native build toolchain, including for compiler-only users.
+The `compiler` extra adds `click` and `griffe`. The current release workflow
+publishes C++ ZIPs using the CMake version; Python wheels are tested in CI and
+are not published by that workflow.
+
 ```python
 from bedrock_protocol import Codec, v2193
 

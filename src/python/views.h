@@ -389,28 +389,33 @@ struct Sequence {
     }
 };
 
-template <class K, class V>
+template <class K, class V, class Prefix = std::size_t>
 struct Mapping {
     using Type = std::map<typename K::Type, typename V::Type>;
     using Key = K;
     using Item = V;
     static Type load(nb::handle value)
     {
-        if (nb::isinstance<MappingView<Mapping>>(value)) {
-            return *castValue<const MappingView<Mapping> &>(value).value;
-        }
         Type result;
-        auto items = nb::borrow<nb::object>(value).attr("items")();
-        for (auto entry : items) {
-            auto pair = mappingPair(entry);
-            result.insert_or_assign(K::load(nb::handle(PyTuple_GET_ITEM(pair.ptr(), 0))),
-                                    V::load(nb::handle(PyTuple_GET_ITEM(pair.ptr(), 1))));
+        if (nb::isinstance<MappingView<Mapping<K, V>>>(value)) {
+            result = *castValue<const MappingView<Mapping<K, V>> &>(value).value;
+        }
+        else {
+            auto items = nb::borrow<nb::object>(value).attr("items")();
+            for (auto entry : items) {
+                auto pair = mappingPair(entry);
+                result.insert_or_assign(K::load(nb::handle(PyTuple_GET_ITEM(pair.ptr(), 0))),
+                                        V::load(nb::handle(PyTuple_GET_ITEM(pair.ptr(), 1))));
+            }
+        }
+        if (result.size() > std::numeric_limits<Prefix>::max()) {
+            throw nb::value_error("map has too many elements for its length prefix");
         }
         return result;
     }
     static nb::object get(std::shared_ptr<const Type> value, int protocol)
     {
-        return nb::cast(MappingView<Mapping>{std::move(value), protocol});
+        return nb::cast(MappingView<Mapping<K, V>>{std::move(value), protocol});
     }
 };
 

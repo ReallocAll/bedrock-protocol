@@ -122,6 +122,19 @@ Wheel builds use `conan-py-build==0.6.4`, `nanobind==3.1.0`, OpenSSL 3.5.2,
 zlib 1.3.1 and Snappy 1.2.1. The runtime has no compiler-extra, bot or transport
 dependency. Install the `compiler` extra to use the installed `bpc` command.
 
+Unlike the pure Python compiler distribution in 0.4.3, `0.5.0.dev0` packages the
+compiler and native runtime together. Installing the package, including
+`bedrock-protocol[compiler]`, requires a compatible native wheel or the C++ build
+toolchain and native dependencies to build one. The `compiler` extra adds only
+`click` and `griffe`; it does not select a pure Python installation.
+
+To use a locally built wheel, install it with the extra and invoke its launcher:
+
+```shell
+python -m pip install "path/to/bedrock_protocol-0.5.0.dev0-<python>-<abi>-<platform>.whl[compiler]"
+bpc --language cpp --out generated --import-path . protocol/network.py
+```
+
 Build on Windows in a Visual Studio developer prompt with clang-cl, CMake and Ninja
 on PATH. Use an explicit private Conan home and a profile for the build toolchain:
 
@@ -151,3 +164,7 @@ For standalone C++, `BEDROCK_PROTOCOL_BUILD_PYTHON=OFF` and
 pregenerated release consumption. Enabling the wire option adds
 `bedrock::protocol_wire`. Existing C++ selectors and package version remain 0.4.3;
 the Python candidate is `0.5.0.dev0`.
+
+The current release workflow checks tags against the CMake version and publishes
+C++ install-tree and pregenerated-source ZIPs. CI builds and tests Python wheels,
+but the release workflow does not publish them to PyPI or attach them to releases.
