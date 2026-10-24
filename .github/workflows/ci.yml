@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, review/cleanup-20261024]
   pull_request:
     branches: [main]
   workflow_call:
