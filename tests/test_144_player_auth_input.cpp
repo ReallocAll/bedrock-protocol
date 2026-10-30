@@ -460,14 +460,15 @@ TEST_CASE("PlayerBlockActionData: the 2168 form always writes its position")
     REQUIRE(rejects<Data>(bytes({0x04})));
 }
 
-// 2168 renumbered nothing, but InternalUpdate took 38 and pushed the count sentinel
-// off it. The input flags gained the same member at 65.
+// PlayerActionType gained InternalUpdate at 2168. InputData's own
+// InternalUpdate is 62 before the 2225 input renumbering and 65 after it.
 TEST_CASE("PlayerActionType: the count sentinel moved at 2168")
 {
     STATIC_REQUIRE(static_cast<int>(bp::PlayerActionType_<1001>::Count) == 38);
     STATIC_REQUIRE(static_cast<int>(bp::PlayerActionType_<2168>::Count) == 39);
     STATIC_REQUIRE(static_cast<int>(bp::PlayerActionType_<2168>::InternalUpdate) == 38);
-    STATIC_REQUIRE(static_cast<int>(NewFlag::InternalUpdate) == 65);
+    STATIC_REQUIRE(static_cast<int>(NewFlag::InternalUpdate) == 62);
+    STATIC_REQUIRE(static_cast<int>(bp::PlayerAuthInputPacket_<2225>::InputData::InternalUpdate) == 65);
 }
 
 // The pre-cereal form is `bitset[InputData.INPUT_NUM]`, so its width is whatever the
