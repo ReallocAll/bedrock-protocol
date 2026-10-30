@@ -25,6 +25,25 @@ jobs:
             exit 1
           fi
 
+      - name: Check both Python wheel versions and native dependency pin
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          projects = {}
+          for name in ("pyproject.toml", "pyproject.native.toml"):
+              with Path(name).open("rb") as source:
+                  projects[name] = tomllib.load(source)["project"]
+              actual = projects[name]["version"]
+              if actual != version:
+                  raise SystemExit(f"::error::{name} version {actual} does not match tag {version}")
+          if f"bedrock-protocol=={version}" not in projects["pyproject.native.toml"]["dependencies"]:
+              raise SystemExit("::error::native wheel must depend on matching compiler wheel")
+          PY
+
   ci:
     needs: tag
     uses: ./.github/workflows/ci.yml
