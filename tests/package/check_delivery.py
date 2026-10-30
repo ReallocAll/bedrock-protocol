@@ -105,7 +105,7 @@ def payloads():
     assert pure_files and native_files
     assert not pure_files.intersection(native_files), pure_files.intersection(native_files)
     assert all(Path(path).name.startswith(("_native.", "v")) for path in native_files), native_files
-    assert "bedrock-protocol==0.5.0.dev0" in native.requires, native.requires
+    assert f"bedrock-protocol=={pure.version}" in native.requires, native.requires
     print(f"Disjoint package payloads: pure={len(pure_files)}, native={len(native_files)}")
 
 
