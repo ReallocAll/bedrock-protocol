@@ -79,6 +79,26 @@ TEST_CASE("PlayerAuthInputPacket: id")
     STATIC_REQUIRE(bp::PlayerAuthInputPacket_<2168>::Id == 144);
 }
 
+// 2225 inserted NorthJumpDeprecated and renumbered the input flags. Keep
+// older server-facing IDs distinct even though the packet layout is shared.
+TEST_CASE("PlayerAuthInputPacket: versioned sneak and sprint input IDs")
+{
+    using OldInput = bp::PlayerAuthInputPacket_<2193>::InputData;
+    using NewInput = bp::PlayerAuthInputPacket_<2225>::InputData;
+    STATIC_REQUIRE(static_cast<int>(OldInput::Sneaking) == 7);
+    STATIC_REQUIRE(static_cast<int>(OldInput::Sprinting) == 19);
+    STATIC_REQUIRE(static_cast<int>(OldInput::StartSneaking) == 26);
+    STATIC_REQUIRE(static_cast<int>(OldInput::StopSneaking) == 27);
+    STATIC_REQUIRE(static_cast<int>(OldInput::StartSprinting) == 24);
+    STATIC_REQUIRE(static_cast<int>(OldInput::StopSprinting) == 25);
+    STATIC_REQUIRE(static_cast<int>(OldInput::SneakCurrentRaw) == 61);
+    STATIC_REQUIRE(static_cast<int>(NewInput::Sneaking) == 8);
+    STATIC_REQUIRE(static_cast<int>(NewInput::Sprinting) == 20);
+    STATIC_REQUIRE(static_cast<int>(NewInput::StartSneaking) == 27);
+    STATIC_REQUIRE(static_cast<int>(NewInput::StartSprinting) == 25);
+    STATIC_REQUIRE(static_cast<int>(NewInput::SneakCurrentRaw) == 64);
+}
+
 TEST_CASE("PlayerAuthInputPacket: v1001 round-trip with no gated payload")
 {
     Older packet = fill_v1001();
@@ -310,7 +330,7 @@ TEST_CASE("PlayerAuthInputPacket: v2168 round-trip with every optional absent")
 }
 
 // The flag list carries the ids themselves, so a high flag costs what a low one does:
-// SneakCurrentRaw is 64 and reaches the wire as its own varint, not as a 65th bit.
+// SneakCurrentRaw is 61 at 2168, represented by its own varint ID.
 TEST_CASE("PlayerAuthInputPacket: v2168 round-trip with block actions and a vehicle")
 {
     Newer packet = fill_v2168();
@@ -337,8 +357,8 @@ TEST_CASE("PlayerAuthInputPacket: v2168 round-trip with block actions and a vehi
     const std::string golden = bytes({
     0x00, 0x00, 0x80, 0x3F, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x80, 0x40,
     0x00, 0x00, 0xA0, 0x40, 0x00, 0x00, 0xC0, 0x40, 0x00, 0x00, 0xE0, 0x40,
-    0x00, 0x00, 0x00, 0x41, 0x00, 0x00, 0x40, 0x40, 0x01, 0x04, 0x00, 0x46,
-    0x5A, 0x80, 0x01, 0x02, 0x00, 0x02, 0x00, 0x00, 0x10, 0x41, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x41, 0x00, 0x00, 0x40, 0x40, 0x01, 0x04, 0x00, 0x44,
+    0x58, 0x7A, 0x02, 0x00, 0x02, 0x00, 0x00, 0x10, 0x41, 0x00, 0x00,
     0x20, 0x41, 0xC8, 0x01, 0x00, 0x00, 0x30, 0x41, 0x00, 0x00, 0x40, 0x41,
     0x00, 0x00, 0x50, 0x41, 0x01, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x00,
     0x2A, 0x2C, 0x2E, 0x08, 0x01, 0x01, 0x00, 0x00, 0xC0, 0x41, 0x00, 0x00,
