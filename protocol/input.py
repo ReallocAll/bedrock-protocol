@@ -230,7 +230,102 @@ class PlayerAuthInputPacket:
     raw_move_vector: Vec2 = field(since=766)
 
 
-@packet(id=144, since=2168)
+@packet(id=144, since=2168, until=2225)
+class PlayerAuthInputPacket:
+    class InputData(IntEnum):
+        ASCEND = 0
+        DESCEND = 1
+        JUMP_DOWN = 2
+        SPRINT_DOWN = 3
+        CHANGE_HEIGHT = 4
+        JUMPING = 5
+        AUTO_JUMPING_IN_WATER = 6
+        SNEAKING = 7
+        SNEAK_DOWN = 8
+        UP = 9
+        DOWN = 10
+        LEFT = 11
+        RIGHT = 12
+        UP_LEFT = 13
+        UP_RIGHT = 14
+        WANT_UP = 15
+        WANT_DOWN = 16
+        WANT_DOWN_SLOW = 17
+        WANT_UP_SLOW = 18
+        SPRINTING = 19
+        ASCEND_BLOCK = 20
+        DESCEND_BLOCK = 21
+        SNEAK_TOGGLE_DOWN = 22
+        PERSIST_SNEAK = 23
+        START_SPRINTING = 24
+        STOP_SPRINTING = 25
+        START_SNEAKING = 26
+        STOP_SNEAKING = 27
+        START_SWIMMING = 28
+        STOP_SWIMMING = 29
+        START_JUMPING = 30
+        START_GLIDING = 31
+        STOP_GLIDING = 32
+        PERFORM_ITEM_INTERACTION = 33
+        PERFORM_BLOCK_ACTIONS = 34
+        PERFORM_ITEM_STACK_REQUEST = 35
+        HANDLED_TELEPORT = 36
+        EMOTING = 37
+        MISSED_SWING = 38
+        START_CRAWLING = 39
+        STOP_CRAWLING = 40
+        START_FLYING = 41
+        STOP_FLYING = 42
+        CLIENT_ACK_SERVER_DATA = 43
+        IS_IN_CLIENT_PREDICTED_VEHICLE = 44
+        PADDLING_LEFT = 45
+        PADDLING_RIGHT = 46
+        BLOCK_BREAKING_DELAY_ENABLED = 47
+        HORIZONTAL_COLLISION = 48
+        VERTICAL_COLLISION = 49
+        DOWN_LEFT = 50
+        DOWN_RIGHT = 51
+        START_USING_ITEM = 52
+        START_SPIN_ATTACK = 53
+        STOP_SPIN_ATTACK = 54
+        IS_HOTBAR_ONLY_TOUCH = 55
+        JUMP_RELEASED_RAW = 56
+        JUMP_PRESSED_RAW = 57
+        JUMP_CURRENT_RAW = 58
+        SNEAK_RELEASED_RAW = 59
+        SNEAK_PRESSED_RAW = 60
+        SNEAK_CURRENT_RAW = 61
+        INTERNAL_UPDATE = 62
+        INPUT_NUM = auto()
+
+    rot: Vec2
+    pos: Vec3
+    move: Vec2
+    y_head_rot: float
+    _true_1: Literal[True] = field(until=2193)
+    input_data: list[InputData]
+    input_mode: InputMode
+    play_mode: ClientPlayMode
+    new_interaction_model: NewInteractionModel
+    interact_rotation: Vec2
+    client_tick: PlayerInputTick
+    pos_delta: Vec3
+    _true_2: Literal[True] = field(until=2193)
+    item_use_transaction: PackedItemUseLegacyInventoryTransaction | None
+    _true_3: Literal[True] = field(until=2193)
+    item_stack_request: ItemStackRequestCereal.RequestData | None
+    _true_4: Literal[True] = field(until=2193)
+    player_block_actions: list[PlayerBlockActionData] | None
+    _true_5: Literal[True] = field(until=2193)
+    vehicle_rot: Vec2 | None
+    _true_6: Literal[True] = field(until=2193)
+    client_predicted_vehicle: ActorUniqueID | None
+    analog_move_vector: Vec2
+    camera_orientation: Vec3
+    raw_move_vector: Vec2
+
+
+@packet(id=144, since=2225)
 class PlayerAuthInputPacket:
     class InputData(IntEnum):
         ASCEND = 0
@@ -305,7 +400,6 @@ class PlayerAuthInputPacket:
     pos: Vec3
     move: Vec2
     y_head_rot: float
-    _true_1: Literal[True] = field(until=2193)
     input_data: list[InputData]
     input_mode: InputMode
     play_mode: ClientPlayMode
@@ -313,15 +407,10 @@ class PlayerAuthInputPacket:
     interact_rotation: Vec2
     client_tick: PlayerInputTick
     pos_delta: Vec3
-    _true_2: Literal[True] = field(until=2193)
     item_use_transaction: PackedItemUseLegacyInventoryTransaction | None
-    _true_3: Literal[True] = field(until=2193)
     item_stack_request: ItemStackRequestCereal.RequestData | None
-    _true_4: Literal[True] = field(until=2193)
     player_block_actions: list[PlayerBlockActionData] | None
-    _true_5: Literal[True] = field(until=2193)
     vehicle_rot: Vec2 | None
-    _true_6: Literal[True] = field(until=2193)
     client_predicted_vehicle: ActorUniqueID | None
     analog_move_vector: Vec2
     camera_orientation: Vec3
